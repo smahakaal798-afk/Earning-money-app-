@@ -487,6 +487,19 @@ class GameViewModel(
         _uiState.update { it.copy(showAdminModal = false) }
     }
 
+    fun openDownloadCtaModal() {
+        _uiState.update { it.copy(showDownloadCtaModal = true) }
+    }
+
+    fun closeDownloadCtaModal() {
+        _uiState.update { it.copy(showDownloadCtaModal = false) }
+    }
+
+    fun notifyShareAction(title: String, subtitle: String) {
+        soundEngine.playCoinTap()
+        showToast(title = title, subtitle = subtitle, type = ToastType.SUCCESS)
+    }
+
     fun claimAdminCommissionsToWallet() {
         if (!isAdmin) return
         val state = _uiState.value

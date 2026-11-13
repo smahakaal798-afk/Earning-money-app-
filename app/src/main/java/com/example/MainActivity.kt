@@ -80,6 +80,7 @@ import com.example.ui.components.ConfettiOverlay
 import com.example.ui.components.CustomToastBanner
 import com.example.ui.components.DailyStreakScreen
 import com.example.ui.components.DepositModal
+import com.example.ui.components.DownloadCtaModal
 import com.example.ui.components.LuckySpinScreen
 import com.example.ui.components.PinLockOverlay
 import com.example.ui.components.ReceiptDialog
@@ -432,6 +433,7 @@ fun SpinMintApp(
                 isAdmin = uiState.isAdmin,
                 onDismiss = viewModel::closeAccountModal,
                 onOpenAdmin = viewModel::openAdminModal,
+                onOpenDownloadCta = viewModel::openDownloadCtaModal,
                 onOpenSecurity = viewModel::openSecurityModal,
                 onLogoutConfirmed = onLogout
             )
@@ -445,7 +447,16 @@ fun SpinMintApp(
                 unclaimedCoins = uiState.unclaimedAdminCoins,
                 commissions = uiState.adminCommissions,
                 onDismiss = viewModel::closeAdminModal,
-                onClaimCommissions = viewModel::claimAdminCommissionsToWallet
+                onClaimCommissions = viewModel::claimAdminCommissionsToWallet,
+                onOpenDownloadCta = viewModel::openDownloadCtaModal
+            )
+        }
+
+        // Download & Start Earning CTA Popup Modal
+        if (uiState.showDownloadCtaModal) {
+            DownloadCtaModal(
+                onDismiss = viewModel::closeDownloadCtaModal,
+                onActionFeedback = viewModel::notifyShareAction
             )
         }
 

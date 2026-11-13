@@ -32,4 +32,8 @@
     <string name="sign_in_google">Sign in with Google</string>
     <string name="logout_cta">Logout</string>
     <string name="app_author_handle">smahakaal798-afk</string>
+    <string name="cta_download_title">Download &amp; Start Earning</string>
+    <string name="cta_download_subtitle">Fast, simple, and secure way to earn rewards from your phone</string>
+    <string name="cta_download_button">Download Now</string>
+    <string name="cta_share_button">Share on WhatsApp / Telegram</string>
 </resources>

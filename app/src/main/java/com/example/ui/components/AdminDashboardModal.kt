@@ -64,7 +64,8 @@ fun AdminDashboardModal(
     unclaimedCoins: Long,
     commissions: List<AdminCommissionRecord>,
     onDismiss: () -> Unit,
-    onClaimCommissions: () -> Unit
+    onClaimCommissions: () -> Unit,
+    onOpenDownloadCta: () -> Unit = {}
 ) {
     val nf = NumberFormat.getNumberInstance(Locale.US)
     val totalInr = totalCommissionCoins * 0.01
@@ -245,6 +246,25 @@ fun AdminDashboardModal(
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = TextSecondary
                             )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            androidx.compose.material3.OutlinedButton(
+                                onClick = {
+                                    onDismiss()
+                                    onOpenDownloadCta()
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .testTag("admin_open_download_cta_button"),
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.dp, NeonCyan)
+                            ) {
+                                Text(
+                                    text = "Open Download & Share CTA Popup",
+                                    color = NeonCyan,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 }

@@ -330,6 +330,7 @@ data class GameUiState(
     val showHistorySheet: Boolean = false,
     val showAccountModal: Boolean = false,
     val showAdminModal: Boolean = false,
+    val showDownloadCtaModal: Boolean = false,
     val adminCommissions: List<AdminCommissionRecord> = emptyList(),
     val claimedAdminCoins: Long = 0L,
     val activeToast: ToastMessage? = null,
