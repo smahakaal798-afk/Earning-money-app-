@@ -280,10 +280,18 @@ data class WithdrawalTransaction(
 data class SecurityState(
     val hasPin: Boolean = false,
     val savedPin: String = "",
+    val usePatternLock: Boolean = false,
+    val savedPattern: String = "",
     val lockAppOnLaunch: Boolean = false,
     val requirePinForWallet: Boolean = true,
     val isAppLocked: Boolean = false
-)
+) {
+    val hasPattern: Boolean
+        get() = savedPattern.split("-").filter { it.isNotBlank() }.size >= 4
+
+    val hasAnyAppLock: Boolean
+        get() = hasPin || hasPattern
+}
 
 enum class ToastType {
     SUCCESS,

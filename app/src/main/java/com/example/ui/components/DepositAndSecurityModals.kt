@@ -25,6 +25,8 @@ import androidx.compose.material.icons.automirrored.rounded.Backspace
 import androidx.compose.material.icons.rounded.AddCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Pattern
+import androidx.compose.material.icons.rounded.Pin
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material3.Button
@@ -356,9 +358,40 @@ fun SecurityVaultModal(
     onDisablePin: (String) -> Unit,
     onToggleLaunchLock: (Boolean) -> Unit,
     onToggleWalletGuard: (Boolean) -> Unit,
-    onLockNow: () -> Unit
+    onLockNow: () -> Unit,
+    onSetPattern: (String) -> Unit = {},
+    onDisablePattern: () -> Unit = {},
+    onSelectLockMode: (Boolean) -> Unit = {}
 ) {
     var pinField by remember { mutableStateOf("") }
+    var selectedTabPattern by remember(securityState.usePatternLock) {
+        mutableStateOf(securityState.usePatternLock)
+    }
+
+    val isProtected = securityState.hasAnyAppLock
+    val patternDotCount = remember(securityState.savedPattern) {
+        securityState.savedPattern.split("-").filter { it.isNotBlank() }.size
+    }
+
+    val shieldTitle = when {
+        securityState.usePatternLock && securityState.hasPattern -> "3x3 PATTERN LOCK ACTIVE"
+        securityState.hasPin -> "PIN PROTECTION ACTIVE"
+        securityState.hasPattern -> "3x3 PATTERN LOCK ACTIVE"
+        else -> "VAULT PROTECTION OFF"
+    }
+
+    val shieldDescription = when {
+        securityState.usePatternLock && securityState.hasPattern ->
+            "Your $patternDotCount-dot login pattern secures SpinMint app launch and quick vault lock."
+        securityState.hasPin && securityState.hasPattern ->
+            "4-digit PIN and $patternDotCount-dot Pattern are both saved. Switch anytime below."
+        securityState.hasPin ->
+            "4-digit Vault PIN protects your wallet actions and SpinMint launch screen."
+        securityState.hasPattern ->
+            "$patternDotCount-dot login pattern is saved. Draw or switch modes anytime."
+        else ->
+            "Choose 4-Digit PIN or 3x3 Login Pattern below to lock Deposits, Withdrawals, and App Launch."
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -370,7 +403,7 @@ fun SecurityVaultModal(
                 .padding(horizontal = 16.dp, vertical = 24.dp),
             shape = RoundedCornerShape(26.dp),
             color = DeepIndigo,
-            border = BorderStroke(1.2.dp, if (securityState.hasPin) BrightEmerald else BorderViolet),
+            border = BorderStroke(1.2.dp, if (isProtected) BrightEmerald else BorderViolet),
             tonalElevation = 12.dp
         ) {
             Column(
@@ -388,7 +421,7 @@ fun SecurityVaultModal(
                         Icon(
                             imageVector = Icons.Rounded.VerifiedUser,
                             contentDescription = null,
-                            tint = if (securityState.hasPin) BrightEmerald else NeonGold,
+                            tint = if (isProtected) BrightEmerald else NeonGold,
                             modifier = Modifier.size(24.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -412,26 +445,22 @@ fun SecurityVaultModal(
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    color = if (securityState.hasPin) EmeraldMint.copy(alpha = 0.14f) else CardSlate,
+                    color = if (isProtected) EmeraldMint.copy(alpha = 0.14f) else CardSlate,
                     border = BorderStroke(
                         1.dp,
-                        if (securityState.hasPin) BrightEmerald.copy(alpha = 0.6f) else BorderViolet
+                        if (isProtected) BrightEmerald.copy(alpha = 0.6f) else BorderViolet
                     )
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
                         Text(
-                            text = if (securityState.hasPin) "VAULT SHIELD ACTIVE" else "PIN PROTECTION OFF",
+                            text = shieldTitle,
                             style = MaterialTheme.typography.labelLarge,
-                            color = if (securityState.hasPin) BrightEmerald else NeonGold,
+                            color = if (isProtected) BrightEmerald else NeonGold,
                             fontWeight = FontWeight.ExtraBold
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = if (securityState.hasPin) {
-                                "4-digit Vault PIN protects your wallet actions and local Mint storage."
-                            } else {
-                                "Create a 4-digit PIN below to lock Deposits, Withdrawals, and App Launch."
-                            },
+                            text = shieldDescription,
                             style = MaterialTheme.typography.bodyMedium,
                             color = TextSecondary
                         )
@@ -440,70 +469,209 @@ fun SecurityVaultModal(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                OutlinedTextField(
-                    value = pinField,
-                    onValueChange = { raw -> pinField = raw.filter { it.isDigit() }.take(4) },
-                    label = {
-                        Text(if (securityState.hasPin) "Current PIN to Disable (or New 4-Digit PIN)" else "Create 4-Digit Vault PIN")
-                    },
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                    singleLine = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("security_pin_input"),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = BrightEmerald,
-                        unfocusedBorderColor = BorderViolet,
-                        focusedLabelColor = BrightEmerald,
-                        unfocusedLabelColor = TextSecondary,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
-                    )
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
+                // Login / Vault Lock Mode Switcher: 4-Digit PIN vs 3x3 Pattern
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Button(
-                        onClick = {
-                            onSetPin(pinField)
-                            if (pinField.length == 4) pinField = ""
-                        },
+                    Surface(
                         modifier = Modifier
                             .weight(1f)
                             .height(48.dp)
-                            .testTag("save_vault_pin_button"),
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable {
+                                selectedTabPattern = false
+                                onSelectLockMode(false)
+                            }
+                            .testTag("lock_mode_pin_button"),
                         shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = EmeraldMint,
-                            contentColor = VoidObsidian
+                        color = if (!selectedTabPattern) NeonGold.copy(alpha = 0.18f) else CardSlate,
+                        border = BorderStroke(
+                            1.2.dp,
+                            if (!selectedTabPattern) NeonGold else BorderViolet
                         )
                     ) {
-                        Text(
-                            text = if (securityState.hasPin) "Update PIN" else "Enable PIN",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Pin,
+                                contentDescription = null,
+                                tint = if (!selectedTabPattern) NeonGold else TextSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "4-Digit PIN",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = if (!selectedTabPattern) NeonGold else TextSecondary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
 
-                    if (securityState.hasPin) {
-                        OutlinedButton(
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable {
+                                selectedTabPattern = true
+                                onSelectLockMode(true)
+                            }
+                            .testTag("lock_mode_pattern_button"),
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (selectedTabPattern) BrightEmerald.copy(alpha = 0.18f) else CardSlate,
+                        border = BorderStroke(
+                            1.2.dp,
+                            if (selectedTabPattern) BrightEmerald else BorderViolet
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Pattern,
+                                contentDescription = null,
+                                tint = if (selectedTabPattern) BrightEmerald else TextSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "3x3 Pattern",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = if (selectedTabPattern) BrightEmerald else TextSecondary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                if (selectedTabPattern) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp),
+                        color = CardSlate,
+                        border = BorderStroke(1.dp, BorderViolet)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = if (securityState.hasPattern) {
+                                    "Redraw to change your 3x3 Login Pattern ($patternDotCount dots active)"
+                                } else {
+                                    "Draw at least 4 dots to set your 3x3 Login Pattern"
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (securityState.hasPattern) BrightEmerald else TextPrimary,
+                                fontWeight = FontWeight.SemiBold,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            PatternLockPad(
+                                isSuccess = securityState.hasPattern,
+                                onPatternComplete = { pattern ->
+                                    onSetPattern(pattern)
+                                }
+                            )
+                            if (securityState.hasPattern) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                OutlinedButton(
+                                    onClick = onDisablePattern,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(48.dp)
+                                        .testTag("clear_vault_pattern_button"),
+                                    shape = RoundedCornerShape(14.dp),
+                                    border = BorderStroke(1.dp, RoseAlert)
+                                ) {
+                                    Text(
+                                        text = "Clear 3x3 Pattern",
+                                        color = RoseAlert,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    OutlinedTextField(
+                        value = pinField,
+                        onValueChange = { raw -> pinField = raw.filter { it.isDigit() }.take(4) },
+                        label = {
+                            Text(if (securityState.hasPin) "Current PIN to Disable (or New 4-Digit PIN)" else "Create 4-Digit Vault PIN")
+                        },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("security_pin_input"),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = BrightEmerald,
+                            unfocusedBorderColor = BorderViolet,
+                            focusedLabelColor = BrightEmerald,
+                            unfocusedLabelColor = TextSecondary,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
                             onClick = {
-                                onDisablePin(pinField)
-                                pinField = ""
+                                onSetPin(pinField)
+                                if (pinField.length == 4) pinField = ""
                             },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(48.dp),
+                                .height(48.dp)
+                                .testTag("save_vault_pin_button"),
                             shape = RoundedCornerShape(14.dp),
-                            border = BorderStroke(1.dp, RoseAlert)
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = EmeraldMint,
+                                contentColor = VoidObsidian
+                            )
                         ) {
-                            Text("Disable PIN", color = RoseAlert, style = MaterialTheme.typography.labelLarge)
+                            Text(
+                                text = if (securityState.hasPin) "Update PIN" else "Enable PIN",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        if (securityState.hasPin) {
+                            OutlinedButton(
+                                onClick = {
+                                    onDisablePin(pinField)
+                                    pinField = ""
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
+                                    .testTag("disable_vault_pin_button"),
+                                shape = RoundedCornerShape(14.dp),
+                                border = BorderStroke(1.dp, RoseAlert)
+                            ) {
+                                Text("Disable PIN", color = RoseAlert, style = MaterialTheme.typography.labelLarge)
+                            }
                         }
                     }
                 }
@@ -551,7 +719,7 @@ fun SecurityVaultModal(
                             color = TextPrimary
                         )
                         Text(
-                            text = "Require PIN screen when opening SpinMint",
+                            text = "Require PIN or 3x3 Pattern when opening SpinMint",
                             style = MaterialTheme.typography.bodyMedium,
                             color = TextSecondary
                         )
@@ -563,7 +731,7 @@ fun SecurityVaultModal(
                     )
                 }
 
-                if (securityState.hasPin) {
+                if (isProtected) {
                     Spacer(modifier = Modifier.height(14.dp))
                     OutlinedButton(
                         onClick = onLockNow,
@@ -594,7 +762,7 @@ fun SecurityVaultModal(
                         Icon(Icons.Rounded.Shield, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "DataStore Local Vault • Fair-Play RNG Active • Anti-Negative Balance Guard",
+                            text = "DataStore Local Vault • PIN & 3x3 Pattern • Anti-Negative Balance Guard",
                             style = MaterialTheme.typography.labelSmall,
                             color = TextSecondary
                         )
@@ -607,10 +775,16 @@ fun SecurityVaultModal(
 
 @Composable
 fun PinLockOverlay(
-    onUnlockAttempt: (String) -> Boolean
+    securityState: SecurityState = SecurityState(),
+    onUnlockWithPin: (String) -> Boolean,
+    onUnlockWithPattern: (String) -> Boolean = { false }
 ) {
     var entered by remember { mutableStateOf("") }
     var wrongPinError by remember { mutableStateOf(false) }
+    var wrongPatternError by remember { mutableStateOf(false) }
+    var showPatternPad by remember(securityState.usePatternLock, securityState.hasPattern, securityState.hasPin) {
+        mutableStateOf((securityState.usePatternLock && securityState.hasPattern) || (!securityState.hasPin && securityState.hasPattern))
+    }
 
     fun appendDigit(d: String) {
         if (entered.length >= 4) return
@@ -618,7 +792,7 @@ fun PinLockOverlay(
         val next = entered + d
         entered = next
         if (next.length == 4) {
-            val ok = onUnlockAttempt(next)
+            val ok = onUnlockWithPin(next)
             if (!ok) {
                 wrongPinError = true
                 entered = ""
@@ -634,94 +808,157 @@ fun PinLockOverlay(
     ) {
         Column(
             modifier = Modifier
-                .widthIn(max = 320.dp)
+                .widthIn(max = 340.dp)
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
-                imageVector = Icons.Rounded.Lock,
+                imageVector = if (showPatternPad) Icons.Rounded.Pattern else Icons.Rounded.Lock,
                 contentDescription = "Vault Locked",
-                tint = NeonGold,
+                tint = if (showPatternPad) BrightEmerald else NeonGold,
                 modifier = Modifier.size(48.dp)
             )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "SpinMint Vault Locked",
+                text = if (showPatternPad) "Draw Your Login Pattern" else "SpinMint Vault Locked",
                 style = MaterialTheme.typography.headlineSmall,
                 color = TextPrimary,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = if (wrongPinError) "Incorrect PIN. Try again." else "Enter your 4-digit Vault PIN",
+                text = if (showPatternPad) {
+                    if (wrongPatternError) "Incorrect Pattern. Try again." else "Connect at least 4 dots to unlock"
+                } else {
+                    if (wrongPinError) "Incorrect PIN. Try again." else "Enter your 4-digit Vault PIN"
+                },
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (wrongPinError) RoseAlert else TextSecondary
+                color = if ((showPatternPad && wrongPatternError) || (!showPatternPad && wrongPinError)) {
+                    RoseAlert
+                } else {
+                    TextSecondary
+                },
+                textAlign = TextAlign.Center
             )
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // 4 PIN Dots
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                repeat(4) { idx ->
-                    val filled = idx < entered.length
-                    Box(
-                        modifier = Modifier
-                            .size(18.dp)
-                            .clip(CircleShape)
-                            .background(if (filled) NeonGold else CardSlateElevated)
+            if (showPatternPad) {
+                Surface(
+                    shape = RoundedCornerShape(22.dp),
+                    color = CardSlate,
+                    border = BorderStroke(
+                        1.2.dp,
+                        if (wrongPatternError) RoseAlert else BorderViolet
                     )
+                ) {
+                    Box(modifier = Modifier.padding(16.dp)) {
+                        PatternLockPad(
+                            isError = wrongPatternError,
+                            onPatternComplete = { pattern ->
+                                val ok = onUnlockWithPattern(pattern)
+                                wrongPatternError = !ok
+                            }
+                        )
+                    }
                 }
-            }
+            } else {
+                // 4 PIN Dots
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    repeat(4) { idx ->
+                        val filled = idx < entered.length
+                        Box(
+                            modifier = Modifier
+                                .size(18.dp)
+                                .clip(CircleShape)
+                                .background(if (filled) NeonGold else CardSlateElevated)
+                        )
+                    }
+                }
 
-            Spacer(modifier = Modifier.height(26.dp))
+                Spacer(modifier = Modifier.height(26.dp))
 
-            val rows = listOf(
-                listOf("1", "2", "3"),
-                listOf("4", "5", "6"),
-                listOf("7", "8", "9"),
-                listOf("CLR", "0", "DEL")
-            )
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                rows.forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        row.forEach { key ->
-                            Surface(
-                                modifier = Modifier
-                                    .size(68.dp)
-                                    .clickable {
-                                        when (key) {
-                                            "CLR" -> {
-                                                entered = ""
-                                                wrongPinError = false
+                val rows = listOf(
+                    listOf("1", "2", "3"),
+                    listOf("4", "5", "6"),
+                    listOf("7", "8", "9"),
+                    listOf("CLR", "0", "DEL")
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    rows.forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            row.forEach { key ->
+                                Surface(
+                                    modifier = Modifier
+                                        .size(68.dp)
+                                        .clickable {
+                                            when (key) {
+                                                "CLR" -> {
+                                                    entered = ""
+                                                    wrongPinError = false
+                                                }
+                                                "DEL" -> if (entered.isNotEmpty()) entered = entered.dropLast(1)
+                                                else -> appendDigit(key)
                                             }
-                                            "DEL" -> if (entered.isNotEmpty()) entered = entered.dropLast(1)
-                                            else -> appendDigit(key)
+                                        },
+                                    shape = CircleShape,
+                                    color = CardSlate,
+                                    border = BorderStroke(1.dp, BorderViolet)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        if (key == "DEL") {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Rounded.Backspace,
+                                                contentDescription = "Delete digit",
+                                                tint = TextSecondary
+                                            )
+                                        } else {
+                                            Text(
+                                                text = key,
+                                                style = if (key == "CLR") MaterialTheme.typography.labelSmall else MaterialTheme.typography.titleLarge,
+                                                color = TextPrimary,
+                                                fontFamily = JetBrainsMonoFontFamily,
+                                                fontWeight = FontWeight.Bold
+                                            )
                                         }
-                                    },
-                                shape = CircleShape,
-                                color = CardSlate,
-                                border = BorderStroke(1.dp, BorderViolet)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    if (key == "DEL") {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Rounded.Backspace,
-                                            contentDescription = "Delete digit",
-                                            tint = TextSecondary
-                                        )
-                                    } else {
-                                        Text(
-                                            text = key,
-                                            style = if (key == "CLR") MaterialTheme.typography.labelSmall else MaterialTheme.typography.titleLarge,
-                                            color = TextPrimary,
-                                            fontFamily = JetBrainsMonoFontFamily,
-                                            fontWeight = FontWeight.Bold
-                                        )
                                     }
                                 }
                             }
                         }
                     }
+                }
+            }
+
+            if (securityState.hasPin && securityState.hasPattern) {
+                Spacer(modifier = Modifier.height(20.dp))
+                OutlinedButton(
+                    onClick = {
+                        showPatternPad = !showPatternPad
+                        wrongPinError = false
+                        wrongPatternError = false
+                        entered = ""
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .testTag("toggle_unlock_method_button"),
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, NeonCyan.copy(alpha = 0.7f))
+                ) {
+                    Icon(
+                        imageVector = if (showPatternPad) Icons.Rounded.Pin else Icons.Rounded.Pattern,
+                        contentDescription = null,
+                        tint = NeonCyan,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (showPatternPad) "Switch to 4-Digit PIN" else "Switch to 3x3 Pattern",
+                        color = NeonCyan,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }

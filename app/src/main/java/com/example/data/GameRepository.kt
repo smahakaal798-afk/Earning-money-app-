@@ -33,6 +33,8 @@ data class PersistedGameSnapshot(
     val totalTaps: Long = 0L,
     val totalSpins: Int = 0,
     val securityPin: String = "",
+    val securityPattern: String = "",
+    val usePatternLock: Boolean = false,
     val lockAppOnLaunch: Boolean = false,
     val requirePinForWallet: Boolean = true
 )
@@ -61,6 +63,8 @@ class GameRepository(
     private val totalTapsKey = longPreferencesKey("${prefix}_total_taps")
     private val totalSpinsKey = intPreferencesKey("${prefix}_total_spins")
     private val securityPinKey = stringPreferencesKey("${prefix}_security_pin")
+    private val securityPatternKey = stringPreferencesKey("${prefix}_security_pattern")
+    private val usePatternLockKey = booleanPreferencesKey("${prefix}_use_pattern_lock")
     private val lockAppOnLaunchKey = booleanPreferencesKey("${prefix}_lock_app_on_launch")
     private val requirePinForWalletKey = booleanPreferencesKey("${prefix}_require_pin_for_wallet")
 
@@ -107,6 +111,8 @@ class GameRepository(
             totalTaps = prefs[totalTapsKey] ?: 0L,
             totalSpins = prefs[totalSpinsKey] ?: 0,
             securityPin = prefs[securityPinKey] ?: "",
+            securityPattern = prefs[securityPatternKey] ?: "",
+            usePatternLock = prefs[usePatternLockKey] ?: false,
             lockAppOnLaunch = prefs[lockAppOnLaunchKey] ?: false,
             requirePinForWallet = prefs[requirePinForWalletKey] ?: true
         )
@@ -263,6 +269,18 @@ class GameRepository(
     suspend fun setSecurityPin(pin: String) {
         context.spinMintDataStore.edit { prefs ->
             prefs[securityPinKey] = pin
+        }
+    }
+
+    suspend fun setSecurityPattern(pattern: String) {
+        context.spinMintDataStore.edit { prefs ->
+            prefs[securityPatternKey] = pattern
+        }
+    }
+
+    suspend fun setUsePatternLock(enabled: Boolean) {
+        context.spinMintDataStore.edit { prefs ->
+            prefs[usePatternLockKey] = enabled
         }
     }
 

@@ -94,7 +94,9 @@ class GameViewModel(
                 val canClaimToday = snapshot.lastCheckinEpochDay != today
 
                 val hasPin = snapshot.securityPin.length == 4
-                val shouldLockOnFirstRead = !hasEvaluatedLaunchLock && hasPin && snapshot.lockAppOnLaunch
+                val hasPattern = snapshot.securityPattern.split("-").filter { it.isNotBlank() }.size >= 4
+                val hasAnyLock = hasPin || hasPattern
+                val shouldLockOnFirstRead = !hasEvaluatedLaunchLock && hasAnyLock && snapshot.lockAppOnLaunch
                 hasEvaluatedLaunchLock = true
 
                 _uiState.update { state ->
@@ -112,6 +114,8 @@ class GameViewModel(
                         securityState = SecurityState(
                             hasPin = hasPin,
                             savedPin = snapshot.securityPin,
+                            usePatternLock = snapshot.usePatternLock,
+                            savedPattern = snapshot.securityPattern,
                             lockAppOnLaunch = snapshot.lockAppOnLaunch,
                             requirePinForWallet = snapshot.requirePinForWallet,
                             isAppLocked = if (shouldLockOnFirstRead) true else state.securityState.isAppLocked
@@ -718,11 +722,75 @@ class GameViewModel(
         }
         viewModelScope.launch {
             repository.setSecurityPin(pin)
+            repository.setUsePatternLock(false)
             soundEngine.playCashOut()
             showToast(
                 title = "Vault PIN Enabled",
-                subtitle = "Your wallet & deposits are now PIN protected.",
+                subtitle = "Your wallet & login lock are now 4-digit PIN protected.",
                 type = ToastType.SUCCESS
+            )
+        }
+    }
+
+    fun setVaultPattern(pattern: String) {
+        val dots = pattern.split("-").filter { it.isNotBlank() }
+        if (dots.size < 4) {
+            soundEngine.playErrorTone()
+            showToast(
+                title = "Pattern Too Short",
+                subtitle = "Connect at least 4 dots to set your login pattern.",
+                type = ToastType.ERROR
+            )
+            return
+        }
+        viewModelScope.launch {
+            repository.setSecurityPattern(pattern)
+            repository.setUsePatternLock(true)
+            soundEngine.playCashOut()
+            showToast(
+                title = "Login Pattern Updated!",
+                subtitle = "${dots.size}-dot pattern is now active for SpinMint Lock.",
+                type = ToastType.SUCCESS
+            )
+        }
+    }
+
+    fun setLockModePattern(usePattern: Boolean) {
+        val security = _uiState.value.securityState
+        if (usePattern && !security.hasPattern) {
+            viewModelScope.launch { repository.setUsePatternLock(true) }
+            return
+        }
+        if (!usePattern && !security.hasPin) {
+            viewModelScope.launch { repository.setUsePatternLock(false) }
+            return
+        }
+        viewModelScope.launch {
+            repository.setUsePatternLock(usePattern)
+            soundEngine.playCoinTap()
+            showToast(
+                title = if (usePattern) "Switched to 3x3 Pattern Lock" else "Switched to 4-Digit PIN",
+                subtitle = "Your login lock method has been updated.",
+                type = ToastType.INFO
+            )
+        }
+    }
+
+    fun disableVaultPattern() {
+        viewModelScope.launch {
+            repository.setSecurityPattern("")
+            if (_uiState.value.securityState.hasPin) {
+                repository.setUsePatternLock(false)
+            } else {
+                repository.setLockAppOnLaunch(false)
+            }
+            _uiState.update {
+                it.copy(securityState = it.securityState.copy(isAppLocked = false))
+            }
+            showToast(
+                title = "Login Pattern Removed",
+                subtitle = "3x3 pattern lock cleared.",
+                type = ToastType.INFO
             )
         }
     }
@@ -740,7 +808,9 @@ class GameViewModel(
         }
         viewModelScope.launch {
             repository.setSecurityPin("")
-            repository.setLockAppOnLaunch(false)
+            if (!_uiState.value.securityState.hasPattern) {
+                repository.setLockAppOnLaunch(false)
+            }
             _uiState.update {
                 it.copy(securityState = it.securityState.copy(isAppLocked = false))
             }
@@ -753,11 +823,11 @@ class GameViewModel(
     }
 
     fun toggleLaunchLock(enabled: Boolean) {
-        if (enabled && !_uiState.value.securityState.hasPin) {
+        if (enabled && !_uiState.value.securityState.hasAnyAppLock) {
             soundEngine.playErrorTone()
             showToast(
-                title = "Set a 4-Digit PIN First",
-                subtitle = "Create your Vault PIN before enabling App Launch Lock.",
+                title = "Set a PIN or Pattern First",
+                subtitle = "Create a 4-digit PIN or 3x3 Pattern before enabling Launch Lock.",
                 type = ToastType.ERROR
             )
             return
@@ -774,11 +844,11 @@ class GameViewModel(
     }
 
     fun lockVaultNow() {
-        if (!_uiState.value.securityState.hasPin) {
+        if (!_uiState.value.securityState.hasAnyAppLock) {
             soundEngine.playErrorTone()
             showToast(
-                title = "No PIN Set",
-                subtitle = "Set a 4-digit Vault PIN first to lock the app.",
+                title = "No Lock Configured",
+                subtitle = "Set a 3x3 Pattern or 4-digit PIN first to lock the app.",
                 type = ToastType.INFO
             )
             return
@@ -793,7 +863,21 @@ class GameViewModel(
 
     fun unlockAppWithPin(pin: String): Boolean {
         val saved = _uiState.value.securityState.savedPin
-        return if (pin == saved) {
+        return if (saved.isNotEmpty() && pin == saved) {
+            soundEngine.playCoinTap()
+            _uiState.update {
+                it.copy(securityState = it.securityState.copy(isAppLocked = false))
+            }
+            true
+        } else {
+            soundEngine.playErrorTone()
+            false
+        }
+    }
+
+    fun unlockAppWithPattern(pattern: String): Boolean {
+        val saved = _uiState.value.securityState.savedPattern
+        return if (saved.isNotEmpty() && pattern == saved) {
             soundEngine.playCoinTap()
             _uiState.update {
                 it.copy(securityState = it.securityState.copy(isAppLocked = false))

@@ -2,15 +2,20 @@ package com.example
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.example.auth.formatPhoneToE164
+import com.example.auth.isValidOtpCode
 import com.example.data.GameRepository
 import com.example.model.CardAndBoardEngine
 import com.example.model.CardRank
 import com.example.model.CardSuit
 import com.example.model.GameUiState
 import com.example.model.PlayingCard
+import com.example.model.SecurityState
 import com.example.model.TeenPattiHandRank
 import com.example.viewmodel.GameViewModel
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -124,5 +129,32 @@ class ExampleRobolectricTest {
         assertEquals(99L, totalNet)
         assertEquals(1L, totalAdmin)
         assertEquals(0L, pool)
+    }
+
+    @Test
+    fun `security state validates pattern minimum 4 dots and app lock flags`() {
+        val emptyState = SecurityState()
+        assertFalse(emptyState.hasPattern)
+        assertFalse(emptyState.hasAnyAppLock)
+
+        val tooShortPattern = SecurityState(savedPattern = "0-1-2")
+        assertFalse(tooShortPattern.hasPattern)
+        assertFalse(tooShortPattern.hasAnyAppLock)
+
+        val validPattern = SecurityState(savedPattern = "0-1-2-5", usePatternLock = true)
+        assertTrue(validPattern.hasPattern)
+        assertTrue(validPattern.hasAnyAppLock)
+    }
+
+    @Test
+    fun `phone auth formatter normalizes E164 and validates 6 digit otp`() {
+        assertEquals("+919876543210", formatPhoneToE164("+91", "9876543210"))
+        assertEquals("+919876543210", formatPhoneToE164("91", "09876543210"))
+        assertEquals("+14155552671", formatPhoneToE164("+91", "+14155552671"))
+        assertNull(formatPhoneToE164("+91", "1234"))
+
+        assertTrue(isValidOtpCode("123456"))
+        assertFalse(isValidOtpCode("12345"))
+        assertFalse(isValidOtpCode("12ab56"))
     }
 }

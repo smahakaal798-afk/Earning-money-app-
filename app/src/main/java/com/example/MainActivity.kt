@@ -2,6 +2,7 @@ package com.example
 
 import android.graphics.Color as AndroidColor
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
@@ -50,8 +51,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -125,11 +128,24 @@ fun SpinMintAuthRoot(auth: FirebaseAuth = Firebase.auth) {
     val user = currentUser
 
     if (user == null) {
+        val context = LocalContext.current
+        var showPreAuthDownloadModal by remember { mutableStateOf(false) }
+
         SignInScreen(
             onAuthSuccess = {
                 // Auth state listener updates currentUser automatically
-            }
+            },
+            onOpenDownloadCta = { showPreAuthDownloadModal = true }
         )
+
+        if (showPreAuthDownloadModal) {
+            DownloadCtaModal(
+                onDismiss = { showPreAuthDownloadModal = false },
+                onActionFeedback = { title, subtitle ->
+                    Toast.makeText(context, "$title — $subtitle", Toast.LENGTH_SHORT).show()
+                }
+            )
+        }
     } else {
         val uid = user.uid
         val isAdmin = user.email?.equals(SPINMINT_ADMIN_EMAIL, ignoreCase = true) == true &&
@@ -137,6 +153,12 @@ fun SpinMintAuthRoot(auth: FirebaseAuth = Firebase.auth) {
         val context = LocalContext.current
         val scope = rememberCoroutineScope()
         val credentialManager = remember(context) { CredentialManager.create(context) }
+
+        val resolvedDisplayName = user.displayName?.takeIf { it.isNotBlank() }
+            ?: user.phoneNumber?.takeIf { it.isNotBlank() }
+            ?: "SpinMint Player"
+        val resolvedContact = user.email?.takeIf { it.isNotBlank() }
+            ?: user.phoneNumber?.takeIf { it.isNotBlank() }
 
         key(uid) {
             val viewModel: GameViewModel = viewModel(
@@ -152,8 +174,8 @@ fun SpinMintAuthRoot(auth: FirebaseAuth = Firebase.auth) {
                             repository = GameRepository(app, uid),
                             firestoreRepo = FirestoreWalletRepository(db, auth),
                             currentUserId = uid,
-                            userDisplayName = user.displayName ?: "SpinMint Player",
-                            userEmail = user.email,
+                            userDisplayName = resolvedDisplayName,
+                            userEmail = resolvedContact,
                             userPhotoUrl = user.photoUrl?.toString(),
                             isAdmin = isAdmin
                         )
@@ -268,7 +290,7 @@ fun SpinMintApp(
                                 inrBalance = uiState.inrBalance,
                                 usdBalance = uiState.usdBalance,
                                 isMuted = uiState.isMuted,
-                                isSecurityPinActive = uiState.securityState.hasPin,
+                                isSecurityPinActive = uiState.securityState.hasAnyAppLock,
                                 isAdmin = uiState.isAdmin,
                                 userDisplayName = uiState.userDisplayName,
                                 onToggleMute = viewModel::toggleMute,
@@ -339,7 +361,7 @@ fun SpinMintApp(
                             inrBalance = uiState.inrBalance,
                             usdBalance = uiState.usdBalance,
                             isMuted = uiState.isMuted,
-                            isSecurityPinActive = uiState.securityState.hasPin,
+                            isSecurityPinActive = uiState.securityState.hasAnyAppLock,
                             isAdmin = uiState.isAdmin,
                             userDisplayName = uiState.userDisplayName,
                             onToggleMute = viewModel::toggleMute,
@@ -403,7 +425,10 @@ fun SpinMintApp(
                 onDisablePin = viewModel::disableVaultPin,
                 onToggleLaunchLock = viewModel::toggleLaunchLock,
                 onToggleWalletGuard = viewModel::toggleWalletPinGuard,
-                onLockNow = viewModel::lockVaultNow
+                onLockNow = viewModel::lockVaultNow,
+                onSetPattern = viewModel::setVaultPattern,
+                onDisablePattern = viewModel::disableVaultPattern,
+                onSelectLockMode = viewModel::setLockModePattern
             )
         }
 
@@ -429,7 +454,7 @@ fun SpinMintApp(
                 displayName = uiState.userDisplayName,
                 email = uiState.userEmail,
                 coins = uiState.coins,
-                isSecurityPinActive = uiState.securityState.hasPin,
+                isSecurityPinActive = uiState.securityState.hasAnyAppLock,
                 isAdmin = uiState.isAdmin,
                 onDismiss = viewModel::closeAccountModal,
                 onOpenAdmin = viewModel::openAdminModal,
@@ -460,9 +485,13 @@ fun SpinMintApp(
             )
         }
 
-        // Full-Screen App PIN Lock Gate
+        // Full-Screen App PIN / Pattern Lock Gate
         if (uiState.securityState.isAppLocked) {
-            PinLockOverlay(onUnlockAttempt = viewModel::unlockAppWithPin)
+            PinLockOverlay(
+                securityState = uiState.securityState,
+                onUnlockWithPin = viewModel::unlockAppWithPin,
+                onUnlockWithPattern = viewModel::unlockAppWithPattern
+            )
         }
     }
 }

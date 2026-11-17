@@ -286,7 +286,7 @@ fun AccountLogoutModal(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Logout / Switch Google Account",
+                        text = "Logout / Switch Account",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.ExtraBold
                     )
